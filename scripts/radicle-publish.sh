@@ -1,22 +1,15 @@
 #!/usr/bin/env bash
-# Publish poi-compute as a new public Radicle repo.
-# Reads your key passphrase without touching shell history or disk.
+# Push poi-compute to Radicle under the dedicated poi-compute identity
+# (~/.radicle-poi — passphraseless; the disk is LUKS-encrypted).
+# Run after commits:  scripts/radicle-publish.sh
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
-read -rs -p "Radicle key passphrase: " RAD_PASSPHRASE
-echo
-export RAD_PASSPHRASE
+export RAD_HOME=/home/terex/.radicle-poi
 
-rad node start
-rad init \
-  --name poi-compute \
-  --description "Proof-of-Interest compute commons — coordinator, node SDKs, durable daemon, prover, extension, NAOMS hive bridge" \
-  --default-branch main \
-  --public \
-  .
+rad node start 2>/dev/null || true   # no-op if already running
+git push rad main
 
 echo
-echo "Repository ID:"
-rad ls 2>/dev/null | grep poi-compute || rad inspect
-unset RAD_PASSPHRASE
+rad ls 2>/dev/null | grep poi-compute || true
+echo "https://radicle.network/nodes/rosa.radicle.network/rad:z2yQjfF2eoGti9tyLfJxJU1NcdHn6"
