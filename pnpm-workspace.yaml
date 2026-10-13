@@ -1,0 +1,24 @@
+packages:
+  - 'packages/*'
+
+# Build-script allowlist — needed for wrangler dev (workerd) and native
+# inference deps. Keep this list minimal.
+onlyBuiltDependencies:
+  - esbuild
+  - onnxruntime-node
+  - protobufjs
+  - workerd
+
+# Dependency supply-chain policy (see AGENTS.md):
+# - pin direct deps to versions published at least ~7 days ago
+# - never float on latest/*
+minimumReleaseAge: 10080
+
+minimumReleaseAgeExclude:
+  - '@cloudflare/workers-types@5.20260928.1'
+
+overrides:
+  # GHSA-wq5f-xc86-pv6w — sharp <0.35.5
+  sharp: '>=0.35.5'
+  # CVE-2026-4258 — sjcl <1.0.9 via @cloudflare/blindrsa-ts
+  sjcl: '>=1.0.9'

@@ -1,0 +1,29 @@
+{
+  "name": "@poi/coordinator",
+  "version": "0.1.0",
+  "description": "PoI coordinator — Cloudflare Worker + Durable Object: volunteer registry, project pools, job dispatch, ledger, reputation, committees, x402, awards.",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cloudflare/privacypass-ts": "0.9.0",
+    "@huggingface/transformers": "^4.3.1",
+    "@secretlint/core": "^13.0.7",
+    "@secretlint/profiler": "^13.0.7",
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.7",
+    "viem": "^2.21.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260928.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7",
+    "wrangler": "^4.142.0"
+  }
+}

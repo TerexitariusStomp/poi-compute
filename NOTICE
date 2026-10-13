@@ -1,0 +1,20 @@
+poi-compute
+Copyright (c) 2026 poi-compute contributors
+
+This product includes or is derived from third-party software:
+
+* Slop award allocator (elizaOS/slopdotcash) — MIT License.
+  Vendored excerpt at packages/coordinator/src/vendor/slop/
+  (see UPSTREAM.md + LICENSE beside it).
+
+* @wllama/wllama — MIT License. Vendored runtime files under
+  packages/extension/vendor/.
+
+* Provenance: portions of this codebase were originally developed inside
+  the LocalChimera monorepo (AGPL-3.0) and wp-cloud by the same author and
+  are consolidated here under AGPL-3.0-only.
+
+Model weights are not part of this repository. Recommended defaults use
+Apache-2.0-licensed weights (SmolLM2, Qwen2.5 small variants); the model
+registry records a license identifier per model and restricted-licence
+weights (e.g. Llama family) must never be a default.
