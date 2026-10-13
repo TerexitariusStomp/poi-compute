@@ -35,7 +35,7 @@
 
 import type { VolunteerMeta } from './registry'
 import type { PendingJob, JobEnvelope, DirectJobBody } from '@poi/node-core/envelope'
-import { normalizeTaskTypes, stripSwarmClaims, selectVolunteer, validateJobResult, PROJECT, CANONICAL } from './registry'
+import { normalizeTaskTypes, stripSwarmClaims, selectVolunteer, validateJobResult, PROJECT, CANONICAL, WPCLOUD, SWARM, PROJECT_JOB } from './registry'
 import { lintPayload, lintPayloadDeep, classificationOk, redactPayload, parseSealed, stripInstructions, leaksSealed } from './lint'
 import { ESCROW_ABI, USDC_EIP3009_ABI, decodeEip3009Payment, makeClients, resultHash, signDispatch } from './chain'
 import { verifyMessage, verifyTypedData } from 'viem'
@@ -649,6 +649,97 @@ export class CoordinatorDO implements DurableObject {
       if (!this.bearerOk(req, this.env.ADMIN_TOKEN)) return this.json({ error: 'unauthorized' }, 401)
       return this.handleSettle(req)
     }
+    if (url.pathname === '/settle/prepare' && req.method === 'POST') {
+      // Dry-run settlement — the statement /settle would commit, with the
+      // dust→rep flags visible, but no writes. Operators review this
+      // before the monthly payout run (prepare → approve discipline).
+      if (!this.bearerOk(req, this.env.ADMIN_TOKEN)) return this.json({ error: 'unauthorized' }, 401)
+      const body = (await req.json().catch(() => ({}))) as { ids?: string[]; project?: string }
+      return this.json(await this.computeSettlement(body, false))
+    }
+    if (url.pathname === '/services' && req.method === 'GET') {
+      // Public service catalog — what this coordinator accepts, on which
+      // lanes, at which prices. Derived from the shared task-type
+      // taxonomy + PRICE_TABLE so it can't drift from enforcement.
+      const prices = JSON.parse(this.env.PRICE_TABLE || '{}') as Record<string, string>
+      const lanes = JSON.parse(this.env.LANE_PREMIUMS || '{}') as Record<string, number>
+      const taskTypeEntry = (id: number, name: string, gate?: string) => ({
+        taskType: id, name,
+        priceMicroUsdc: prices[String(id)] ?? null,
+        schema: id in PROJECT_JOB ? 'typed' : 'freeform',
+        gate: gate ?? 'public',
+      })
+      return this.json({
+        coordinator: 'poi-compute',
+        services: [
+          taskTypeEntry(CANONICAL.INFERENCE, 'inference'),
+          taskTypeEntry(CANONICAL.STORAGE, 'storage-pin'),
+          taskTypeEntry(CANONICAL.COMPUTE, 'compute'),
+          taskTypeEntry(CANONICAL.BANDWIDTH, 'bandwidth-serve'),
+          taskTypeEntry(WPCLOUD.INFER_TEXT, 'wpcloud-infer-text', 'site-tagged'),
+          taskTypeEntry(WPCLOUD.INFER_SEO, 'wpcloud-infer-seo', 'site-tagged'),
+          taskTypeEntry(WPCLOUD.MODERATE, 'wpcloud-moderate', 'site-tagged'),
+          taskTypeEntry(WPCLOUD.SUPPORT, 'wpcloud-support', 'site-tagged'),
+          taskTypeEntry(PROJECT.AGENT_INFER, 'agent-inference', 'project-pool'),
+          taskTypeEntry(PROJECT.MARKET_RESEARCH, 'market-research', 'project-pool'),
+          taskTypeEntry(PROJECT.REPO_INDEX, 'repo-index', 'project-pool'),
+          taskTypeEntry(PROJECT.SOCIAL_COPY, 'social-copy', 'project-pool'),
+          taskTypeEntry(PROJECT.HUMAN_JURY, 'human-jury', 'project-pool'),
+          taskTypeEntry(PROJECT.WEB_FETCH, 'web-fetch', 'project-pool'),
+          taskTypeEntry(SWARM.SWARM_INFER, 'swarm-inference', 'durable-only'),
+          taskTypeEntry(SWARM.BUILD_VERIFY, 'build-verify', 'durable-only'),
+        ],
+        lanePremiums: lanes,
+        classification: ['PUBLIC', 'INTERNAL'],
+        // INTERNAL = durable+DID-bound dispatch; SECRET rejected outright.
+      })
+    }
+    if (url.pathname === '/blobs' && req.method === 'PUT') {
+      // Content-addressed blob seam — groundwork for pack-object offload
+      // and swarm artifact exchange. Write needs dispatch auth (same as
+      // /jobs); read is public by content hash. Storage is DO-local with
+      // a hard cap — production pin sets move to R2 via the same /blobs
+      // contract (the seam, not the store, is what callers depend on).
+      const auth = await this.jobAuth(req)
+      if (!auth.ok) return this.json({ error: 'unauthorized' }, 401)
+      const body = new Uint8Array(await req.arrayBuffer())
+      const cap = Number(this.env.MAX_PAYLOAD_BYTES || '65536') * 16
+      if (!body.byteLength || body.byteLength > cap) {
+        return this.json({ error: `bad size (1..${cap})` }, 400)
+      }
+      const hash = await this.sha256HexBuf(body.buffer.slice(0, body.byteLength) as ArrayBuffer)
+      // DO storage holds structured values — encode binary as base64 so
+      // arbitrary bytes round-trip losslessly.
+      let bin = ''
+      for (const b of body) bin += String.fromCharCode(b)
+      await this.state.storage.put(`blob:${hash}`, { b64: btoa(bin), bytes: body.byteLength, at: Date.now() })
+      return this.json({ hash, bytes: body.byteLength })
+    }
+    if (url.pathname.startsWith('/blobs/') && req.method === 'GET') {
+      const hash = url.pathname.slice(7).slice(0, 128)
+      if (!/^[0-9a-f]{64}$/.test(hash)) return this.json({ error: 'bad hash' }, 400)
+      const blob = (await this.state.storage.get(`blob:${hash}`)) as { b64: string; bytes: number } | undefined
+      if (!blob) return this.json({ error: 'not found' }, 404)
+      const bin = atob(blob.b64)
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      return new Response(bytes, { headers: { 'content-type': 'application/octet-stream', 'x-content-hash': hash } })
+    }
+    if (url.pathname.startsWith('/site/')) {
+      // ENS site serving — resolve the name's EIP-1577 contenthash to a
+      // CID and redirect to the configured IPFS gateway. A redirect (not
+      // a proxy) keeps bytes off worker CPU; callers that need pinning
+      // submit a STORAGE job with the resolved CID.
+      if (!this.env.ENS_RPC || !this.env.IPFS_GATEWAY_URL) {
+        return this.json({ error: 'ENS site serving not configured' }, 501)
+      }
+      const name = decodeURIComponent(url.pathname.slice(6).split('/')[0]).slice(0, 128)
+      if (!/^[a-z0-9.-]+\.eth$/.test(name)) return this.json({ error: 'bad name' }, 400)
+      const resolved = await this.resolveEnsContent(name)
+      if (!resolved.cid) return this.json({ error: 'no contenthash', name }, 404)
+      return Response.redirect(
+        `${this.env.IPFS_GATEWAY_URL.replace(/\/$/, '')}/ipfs/${resolved.cid}/${url.pathname.slice(6 + name.length)}`, 302)
+    }
     if (url.pathname === '/metrics') {
       // Prometheus exposition — VictoriaMetrics/Prometheus scrape target
       // (no Grafana dependency; AGPL rejected by the license bar anyway).
@@ -657,6 +748,10 @@ export class CoordinatorDO implements DurableObject {
         `chimera_volunteers ${this.registry.size}`,
         `chimera_idle ${[...this.registry.values()].filter((v) => v.status === 'idle').length}`,
         `chimera_durable ${[...this.registry.values()].filter((v) => v.durable).length}`,
+        // Capacity: declared concurrent-job slots across the pool —
+        // what the swarm can actually hold right now, not just headcount.
+        `chimera_capacity_slots ${[...this.registry.values()].reduce((n, v) => n + (v.shardCapacity ?? 1), 0)}`,
+        `chimera_capacity_slots_durable ${[...this.registry.values()].filter((v) => v.durable).reduce((n, v) => n + (v.shardCapacity ?? 1), 0)}`,
         `chimera_pending_jobs ${(await this.keys('pending:')).length}`,
       ]
       for (const [tt, n] of Object.entries(this.countByTaskType()))
@@ -2198,14 +2293,6 @@ export class CoordinatorDO implements DurableObject {
     }
   }
 
-  /** Pending-job TTL — an undispatchable job (no volunteer claims its
-   *  taskType) expires instead of sitting forever (default 1h). */
-  PENDING_TTL_MS?: string
-  /** % of hash-verifiable results (fetch/pin) re-dispatched to a second node
-   *  for spot-checking — verifier-hook groundwork (default 0 = off). */
-  VERIFY_RATE_PCT?: string
-  /** Referral landing target for /r/<volunteerId> redirects. */
-  REFERRAL_TARGET?: string
   /** ENS content-hash resolution — `/.well-known/ens?name=x.eth` returns the
    *  address + contenthash so swarm-pinned project sites can be discovered
    *  through ENS naming. Requires ENS_RPC (mainnet). */
@@ -2220,22 +2307,7 @@ export class CoordinatorDO implements DurableObject {
         pub.getEnsText({ name: name as never, key: 'url' }).catch(() => null),
         pub.getEnsResolver({ name: name as never }).catch(() => null),
       ])
-      // EIP-1577 contenthash — read contenthash(node) off the name's
-      // resolver. Returns raw multicodec bytes; we decode the common IPFS
-      // shape (e3 01 = ipfs-ns, followed by the CIDv1 binary).
-      let contentHash: string | null = null
-      let cid: string | null = null
-      if (resolverAddr) {
-        const raw = await pub.readContract({
-          address: resolverAddr, functionName: 'contenthash', args: [node],
-          abi: [{ name: 'contenthash', type: 'function', stateMutability: 'view',
-                  inputs: [{ name: 'node', type: 'bytes32' }], outputs: [{ type: 'bytes' }] }],
-        }).catch(() => null)
-        if (typeof raw === 'string' && raw.length > 8 && raw !== '0x') {
-          contentHash = raw
-          cid = contentHashToCid(raw)
-        }
-      }
+      const { contentHash, cid } = await this.resolveEnsContent(name, resolverAddr)
       return this.json({
         name, address, url, contentHash, cid,
         gatewayUrl: cid && this.env.IPFS_GATEWAY_URL
@@ -2247,11 +2319,35 @@ export class CoordinatorDO implements DurableObject {
     }
   }
 
-  /** Marks ledger balances settled — used by the monthly Logos payout
-   *  runbook. Balances under MIN_PAYOUT_WEI convert to rep points instead
+  /** EIP-1577 contenthash → CIDv1. Reads contenthash(node) off the name's
+   *  resolver (or looks the resolver up when not provided) and decodes
+   *  the common IPFS shape (e3 01 = ipfs-ns + binary CID). Shared by
+   *  /.well-known/ens and the /site/<name> serving route. */
+  private async resolveEnsContent(
+    name: string, resolverAddr?: string | null,
+  ): Promise<{ contentHash: string | null; cid: string | null }> {
+    const { createPublicClient, http, namehash } = await import('viem')
+    const { mainnet } = await import('viem/chains')
+    const pub = createPublicClient({ chain: mainnet, transport: http(this.env.ENS_RPC) })
+    const resolver = (resolverAddr ??
+      (await pub.getEnsResolver({ name: name as never }).catch(() => null))) as `0x${string}` | null
+    if (!resolver) return { contentHash: null, cid: null }
+    const raw = await pub.readContract({
+      address: resolver, functionName: 'contenthash', args: [namehash(name)],
+      abi: [{ name: 'contenthash', type: 'function', stateMutability: 'view',
+              inputs: [{ name: 'node', type: 'bytes32' }], outputs: [{ type: 'bytes' }] }],
+    }).catch(() => null)
+    if (typeof raw !== 'string' || raw.length <= 8 || raw === '0x') {
+      return { contentHash: null, cid: null }
+    }
+    return { contentHash: raw, cid: contentHashToCid(raw) }
+  }
+
+  /** Compute a settlement statement — shared by /settle/prepare
+   *  (reviewable dry-run) and /settle (commit, the monthly Logos payout
+   *  runbook). Balances under MIN_PAYOUT_WEI convert to rep points instead
    *  of a payout (dust→rep: sub-dust balances aren't worth gas/admin). */
-  private async handleSettle(req: Request): Promise<Response> {
-    const body = (await req.json().catch(() => ({}))) as { ids?: string[]; project?: string }
+  private async computeSettlement(body: { ids?: string[]; project?: string }, commit: boolean) {
     const dust = BigInt(this.env.MIN_PAYOUT_WEI || '0')
     // Per-project statement: settle only ledgers of volunteers registered
     // into the project pool, and include the pool's own host-share ledger.
@@ -2272,18 +2368,29 @@ export class CoordinatorDO implements DurableObject {
       const unpaid = BigInt(led.totalWei) - BigInt(led.settledWei || '0')
       if (dust > 0n && unpaid > 0n && unpaid < dust) {
         // Dust → rep: mark settled, convert to rep points (1 point per micro-USDC).
-        led.settledWei = led.totalWei
-        await this.state.storage.put(key, led)
-        await this.addRep(id, Math.max(1, Math.floor(Number(unpaid / 1_000_000n))), 'dust-conversion', undefined, 'provisioned')
+        if (commit) {
+          led.settledWei = led.totalWei
+          await this.state.storage.put(key, led)
+          await this.addRep(id, Math.max(1, Math.floor(Number(unpaid / 1_000_000n))), 'dust-conversion', undefined, 'provisioned')
+        }
         out[id] = { settledWei: '0', dustToRep: unpaid.toString() }
         continue
       }
-      led.settledWei = led.totalWei
-      await this.state.storage.put(key, led)
+      if (commit) {
+        led.settledWei = led.totalWei
+        await this.state.storage.put(key, led)
+      }
       out[id] = { settledWei: unpaid.toString() }
     }
-    await this.audit('settle', { ledgers: Object.keys(out).length, project: body.project })
-    return this.json({ settled: out, project: body.project })
+    if (commit) {
+      await this.audit('settle', { ledgers: Object.keys(out).length, project: body.project })
+    }
+    return { settled: out, project: body.project }
+  }
+
+  private async handleSettle(req: Request): Promise<Response> {
+    const body = (await req.json().catch(() => ({}))) as { ids?: string[]; project?: string }
+    return this.json(await this.computeSettlement(body, true))
   }
 
   /** Direct micro-donations → provisioned rep + ledger credit. A patronage
