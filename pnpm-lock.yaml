@@ -133,6 +133,25 @@ importers:
         specifier: ^0.25.0
         version: 0.25.12
 
+  packages/hive-bridge:
+    dependencies:
+      '@poi/node-core':
+        specifier: workspace:*
+        version: link:../node-core
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^26.0.0
+        version: 26.6.5
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/node@26.6.5)(terser@5.51.2)
+
   packages/node-core:
     dependencies:
       zod:

@@ -1,0 +1,24 @@
+{
+  "name": "@poi/hive-bridge",
+  "version": "0.1.0",
+  "description": "NAOMS \u2194 PoI bridge \u2014 presents a NAOMS hive's lender pool to the coordinator as one volunteer (hive-scoped dispatch with global spillover) and translates job envelopes + receipts both ways. Adapter seam only; no NAOMS source is vendored.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@poi/node-core": "workspace:*",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7",
+    "@types/node": "^26.0.0"
+  }
+}

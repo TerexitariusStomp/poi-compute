@@ -14,6 +14,7 @@ export interface JobEnvelope {
   volunteerId?: string
   jobId?: string
   address?: string
+  taskType?: number
   taskTypes?: unknown
   capabilities?: Record<string, unknown>
   networks?: string[]
