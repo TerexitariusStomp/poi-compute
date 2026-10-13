@@ -2,7 +2,8 @@ name = "poi-coordinator"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
-account_id = "REMOVED-ACCOUNT-ID"
+# account_id intentionally unset — wrangler infers it from the logged-in
+# session; set it here only if your login spans multiple CF accounts.
 
 # PARALLEL DEPLOYMENT — do NOT enable the production route here.
 # The live coordinator at coordinator.widespread.fyi is served by the
