@@ -1,0 +1,30 @@
+{
+  "name": "@poi/durable-node",
+  "version": "0.1.0",
+  "description": "Persistent volunteer daemon — swarm-tier backbone (task 300 SWARM_INFER via Ollama/transformers.js, 301 BUILD_VERIFY sandboxed). did:key identity, dispatch-signature verification, optional Helia weight fetching.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "poi-durable-node": "./bin/durable-node.mjs"
+  },
+  "scripts": {
+    "start": "node bin/durable-node.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@poi/node-core": "workspace:*",
+    "viem": "^2.21.0"
+  },
+  "peerDependencies": {
+    "@helia/unixfs": ">=4.0.0",
+    "@huggingface/transformers": ">=3.0.0",
+    "helia": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@helia/unixfs": { "optional": true },
+    "@huggingface/transformers": { "optional": true },
+    "helia": { "optional": true }
+  }
+}

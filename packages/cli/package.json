@@ -1,0 +1,39 @@
+{
+  "name": "@poi/cli",
+  "version": "0.1.0",
+  "description": "Operator scripts — job submission, settlement, agent registration, ENS publish, eval/bench harnesses, committee/challenge/award e2e tests, MCP bridge, x402 roundtrip.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "poi-submit": "./bin/submit.mjs",
+    "poi-settle": "./bin/settle.mjs",
+    "poi-register-agent": "./bin/register-agent.mjs",
+    "poi-ens-publish": "./bin/ens-publish.mjs",
+    "poi-eval": "./bin/eval.mjs",
+    "poi-market-research": "./bin/market-research.mjs",
+    "poi-mcp-bridge": "./bin/mcp-bridge.mjs",
+    "poi-ollama-bench": "./bin/ollama-bench.mjs",
+    "poi-award-test": "./bin/award-test.mjs",
+    "poi-challenge-test": "./bin/challenge-test.mjs",
+    "poi-committee-test": "./bin/committee-test.mjs",
+    "poi-committee-federated-test": "./bin/committee-federated-test.mjs",
+    "poi-x402-roundtrip": "./bin/x402-roundtrip.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@poi/node-core": "workspace:*",
+    "viem": "^2.21.0"
+  },
+  "peerDependencies": {
+    "@helia/unixfs": ">=4.0.0",
+    "@huggingface/transformers": ">=3.0.0",
+    "helia": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@helia/unixfs": { "optional": true },
+    "@huggingface/transformers": { "optional": true },
+    "helia": { "optional": true }
+  }
+}

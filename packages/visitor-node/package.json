@@ -1,0 +1,23 @@
+{
+  "name": "@poi/visitor-node",
+  "version": "0.1.0",
+  "description": "Tier-1 ephemeral page script — sites embed one <script> tag and consenting visitors contribute idle compute. Thin wrapper over @poi/browser-sdk with data-* config and a consent+status pill.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./src/visitor-node.ts",
+  "exports": {
+    ".": "./src/visitor-node.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@poi/browser-sdk": "workspace:*",
+    "@poi/node-core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

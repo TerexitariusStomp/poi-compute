@@ -1,0 +1,43 @@
+{
+  "name": "@poi/browser-sdk",
+  "version": "0.1.0",
+  "description": "Browser volunteer node — run compute/storage/inference tasks in a tab. Compute-focused subset of @localchimera/browser-sdk: wallet/chain adapters (Web3Auth, Casper) are intentionally excluded; consumers bring an EIP-1193 provider or run unauthenticated.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@poi/node-core": "workspace:*",
+    "viem": "^2.21.0"
+  },
+  "peerDependencies": {
+    "@helia/unixfs": ">=4.0.0",
+    "@huggingface/transformers": ">=3.0.0",
+    "@mlc-ai/web-llm": ">=0.2.0",
+    "helia": ">=4.0.0",
+    "multiformats": ">=12.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@helia/unixfs": { "optional": true },
+    "@huggingface/transformers": { "optional": true },
+    "@mlc-ai/web-llm": { "optional": true },
+    "helia": { "optional": true },
+    "multiformats": { "optional": true }
+  },
+  "devDependencies": {
+    "@helia/unixfs": "^4.0.0",
+    "@huggingface/transformers": "^4.3.1",
+    "@mlc-ai/web-llm": "^0.2.80",
+    "helia": "^5.0.0",
+    "multiformats": "^13.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

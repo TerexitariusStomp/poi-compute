@@ -1,0 +1,20 @@
+{
+  "name": "@poi/prover",
+  "version": "0.1.0",
+  "description": "Deterministic-replay execution prover — independently re-executes jobs and compares against claimed results. The honest substrate of opML-style verification (not zk, not a fraud-proof VM).",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "poi-prover": "./bin/prover.mjs"
+  },
+  "scripts": {
+    "start": "node bin/prover.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@poi/node-core": "workspace:*",
+    "@huggingface/transformers": "^4.3.1"
+  }
+}

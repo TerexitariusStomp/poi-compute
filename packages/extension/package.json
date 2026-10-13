@@ -1,0 +1,16 @@
+{
+  "name": "@poi/extension",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Chimera Compute volunteer-node browser extension (MV3)",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "dependencies": {
+    "@wllama/wllama": "3.6.1"
+  },
+  "license": "AGPL-3.0-only"
+}
