@@ -8,7 +8,7 @@ durable desktop/swarm daemons — powering that project's agents: inference,
 marketing, support, research, web fetch, CI verification, and a self-serve
 content-addressed data plane. Contributors earn USDC (no token anywhere)
 plus lane-scoped, two-channel reputation. Detailed design:
-`docs/architecture.md`, roadmap in `docs/roadmap.md`.
+`docs/megaplan/architecture.md`, roadmap in `docs/megaplan/roadmap.md`.
 
 ## Packages
 

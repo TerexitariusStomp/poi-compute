@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Proof-of-Interest Compute — a tokenless, community-powered compute commons: coordinator, node tiers, SDKs, tooling.",
+  "description": "Proof-of-Interest Compute \u2014 a tokenless, community-powered compute commons: coordinator, node tiers, SDKs, tooling.",
   "license": "AGPL-3.0-only",
   "packageManager": "pnpm@10.13.1",
   "scripts": {
-    "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm -r run test",
-    "license-check": "node packages/cli/src/license-check.mjs"
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "license-check": "node scripts/license-check.mjs",
+    "check:licenses": "node scripts/license-check.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
