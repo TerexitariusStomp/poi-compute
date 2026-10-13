@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@poi/node-core": "workspace:*",
     "@cloudflare/privacypass-ts": "0.9.0",
     "@huggingface/transformers": "^4.3.1",
     "@secretlint/core": "^13.0.7",

@@ -34,6 +34,7 @@
  */
 
 import type { VolunteerMeta } from './registry'
+import type { PendingJob, JobEnvelope, DirectJobBody } from '@poi/node-core/envelope'
 import { normalizeTaskTypes, stripSwarmClaims, selectVolunteer, validateJobResult, PROJECT, CANONICAL } from './registry'
 import { lintPayload, lintPayloadDeep, classificationOk, redactPayload, parseSealed, stripInstructions, leaksSealed } from './lint'
 import { ESCROW_ABI, USDC_EIP3009_ABI, decodeEip3009Payment, makeClients, resultHash, signDispatch } from './chain'
@@ -149,71 +150,6 @@ interface Env {
   JOB_RESULT_TIMEOUT_MS?: string
   MAX_PAYLOAD_BYTES?: string
   MAX_VOLUNTEERS?: string
-}
-
-interface PendingJob {
-  taskType: number
-  payload: string
-  amountWei: string
-  source: 'chain' | 'direct'
-  consumer?: string
-  site?: string            // wp-cloud site tag — prefer that site's own visitors
-  project?: string         // project:<slug> pool — prefer that pool's supporters
-  classification?: string  // 'PUBLIC' (default) or 'INTERNAL' (durable+DID-only dispatch)
-  difficulty?: number      // >=2 prefers high-capability nodes
-  domain?: string          // specialization lane hint
-  modelClass?: string      // 'instruct' | 'embedding' | ...
-  priority?: 'interactive' | 'batch'  // interactive dispatches ahead of batch under contention
-  group?: string           // redundant-dispatch group id — sibling jobs share it
-  resultToken?: string     // bearer token for /results/<id>?token= — lets batch consumers read their own result without ADMIN_TOKEN
-  verifyOf?: string        // set on spot-check replica jobs — result compared against the original
-  modPost?: string         // internal: social-moderation job — result verdicts the post
-  deadline?: number // unix seconds; 0/undefined = none
-  since: number
-}
-
-interface JobEnvelope {
-  type: string
-  volunteerId?: string
-  jobId?: string
-  address?: string
-  taskTypes?: unknown
-  capabilities?: Record<string, unknown>
-  networks?: string[]
-  site?: string
-  project?: string
-  referrer?: string
-  did?: string
-  sig?: string
-  durable?: boolean
-  shardCapacity?: number
-  /** Group data-share opt-in — visitor consented to publish contribution
-   *  stats on the project's group feed. */
-  shareData?: boolean
-  status?: string
-  result?: string
-  resultSig?: string
-  /** Inference engine the node claims it ran ('ollama'|'onnx'|…) — stored
-   *  on the result record; the prover replays on the same engine. */
-  engine?: string
-  reason?: string
-}
-
-interface DirectJobBody {
-  payload?: string
-  taskType?: number
-  amountWei?: string
-  site?: string
-  project?: string
-  classification?: string
-  difficulty?: number
-  domain?: string
-  modelClass?: string
-  priority?: string
-  group?: string           // set internally for jury-redundant siblings
-  redundant?: number       // N sibling dispatches in one group (consumer aggregates)
-  verifyOf?: string        // set internally on spot-check replica jobs
-  modPost?: string         // set internally on pool-moderation jobs
 }
 
 const MAX_RESULT_BYTES = 256 * 1024

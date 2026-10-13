@@ -24,6 +24,9 @@ importers:
       '@huggingface/transformers':
         specifier: ^4.3.1
         version: 4.3.1(@types/node@26.6.5)
+      '@poi/node-core':
+        specifier: workspace:*
+        version: link:../node-core
       '@secretlint/core':
         specifier: ^13.0.7
         version: 13.0.7
@@ -52,6 +55,19 @@ importers:
       wrangler:
         specifier: ^4.142.0
         version: 4.150.0(@cloudflare/workers-types@5.20261013.1)(@types/node@26.6.5)
+
+  packages/node-core:
+    dependencies:
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/node@26.6.5)
 
 packages:
 

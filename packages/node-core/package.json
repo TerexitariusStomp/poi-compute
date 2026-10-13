@@ -1,0 +1,22 @@
+{
+  "name": "@poi/node-core",
+  "version": "0.1.0",
+  "description": "Shared PoI wire protocol — task types, job envelopes, volunteer metadata, did:key helpers, and signing message formats. Consumed by the coordinator, durable-node, visitor script, extension, and hive-bridge.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}
