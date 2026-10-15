@@ -76,6 +76,13 @@ describe('dispatch → envelope', () => {
     expect(sent.payload).toBe('nonce-abc')
   })
 
+  it('requests exact replay for deterministic task types, deterministic for inference', async () => {
+    await b.handleDispatch(dispatch({ taskType: PROJECT.CANARY }))
+    await b.handleDispatch(dispatch({ jobId: 'job-2', taskType: PROJECT.AGENT_INFER }))
+    expect(node.submitted[0].repro).toEqual({ mode: 'exact' })
+    expect(node.submitted[1].repro).toEqual({ mode: 'deterministic' })
+  })
+
   it('refuses INTERNAL classification before an envelope exists', () => {
     expect(() =>
       toNaomsEnvelope(dispatch({ classification: 'INTERNAL' })),
@@ -126,6 +133,24 @@ describe('receipt → result', () => {
     const { result: _dropped, ...rest } = r1
     expect(await receiptDigest(rest)).toBe(r1.digest)
     expect(receiptCanonical(r1)).not.toContain('mock-result')
+  })
+
+  it('commits usage and repro into the digest — they are signed fields', async () => {
+    const grant = await node.acquireCapability()
+    const r1 = await node.submit(grant, {
+      bridgeJobId: 'j3', taskType: 200, payload: 'x',
+      classification: 'PUBLIC', paid: false,
+      repro: { mode: 'deterministic', seed: 7, decoding: 'greedy' },
+    })
+    expect(r1.usage).toEqual({ unit: 'seconds', amount: 1 })
+    expect(r1.repro).toEqual({ mode: 'deterministic', seed: 7, decoding: 'greedy' })
+    // Different usage or repro over otherwise-identical fields must
+    // produce a different digest — metering can't be forged post-hoc.
+    const { digest: _d1, lenderSig: _s1, borrowerSig: _s2, ...unsigned } = r1
+    const alteredUsage = { ...unsigned, usage: { unit: 'seconds' as const, amount: 2 } }
+    const alteredRepro = { ...unsigned, repro: { mode: 'none' as const } }
+    expect(await receiptDigest(alteredUsage)).not.toBe(r1.digest)
+    expect(await receiptDigest(alteredRepro)).not.toBe(r1.digest)
   })
 })
 

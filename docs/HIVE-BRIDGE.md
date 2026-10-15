@@ -40,6 +40,29 @@ it does not exist. The real substrate:
 | Wire format | Execution-package jobs over DIDComm/iroh — **jointly written spec, CC BY 4.0** | `docs/spec/naoms-compute.md` is the draft skeleton |
 | License | NAOMS itself unlicensed (TBD); shared spec CC BY 4.0 | Bridge code stays AGPL-3.0 under PoI; spec is the shared artifact |
 
+## Spec v0.2 (NAOMS design doc, erex 2026-10-15)
+
+The NAOMS-side design answered the remaining structural questions; the
+spec and these types now reflect it:
+
+- **Account links (§1a)** — did:key stays the only signing identity;
+  EOAs participate via a dual-signed `AccountLink` (EIP-712/EIP-191
+  statement + did:key countersign, purpose `node` | `payout`). The
+  bridge remains the single accountable identity; EOA nodes sit behind
+  it as `node` links.
+- **Metered receipts (§6)** — `usage` (`tokens`|`seconds`) and `repro`
+  (replay parameters) are committed digest fields.
+- **Settlement (§8/§9)** — one payee: the hive treasury Safe (a
+  `payout` link on the bridge grant). Money crosses only in the signed
+  periodic `SettlementStatement` — never in a job envelope. The lender
+  ↔ treasury split is hive-internal.
+- **Disputes (§10)** — non-delivery is a recorded fact; wrong results
+  are decided by the bridge's replay prover (`ChallengeResult`,
+  `reproduced:false`), held pay, and 3-member sortition review. 72h
+  challenge / 4d review / 7d close. Replay determinism is scoped by the
+  committed `repro` mode — `exact`, `deterministic`, or `none` — so
+  which jobs are machine-challengeable is decided at dispatch.
+
 ## Boundary rules (enforced in `adapter.ts` / `receipt-translate.ts`)
 
 - **INTERNAL jobs never cross.** `toNaomsEnvelope` throws on any
@@ -74,9 +97,10 @@ site-preference + global-spillover cascade does the rest.
 
 ## Status
 
-- `MockNaomsNode` implements the corrected model in-process; the 11-test
+- `MockNaomsNode` implements the corrected model in-process; the 13-test
   suite covers hive-issued identity, boundary enforcement, digest
-  stability, schema validation, and event-driven revocation.
+  stability (incl. committed `usage`/`repro`), replay requests, schema
+  validation, and event-driven revocation.
 - `LocalNaomsNode` is the honest stub pending the shared spec + NAOMS
   execution-package access.
 - Next step is document, not code: the joint spec

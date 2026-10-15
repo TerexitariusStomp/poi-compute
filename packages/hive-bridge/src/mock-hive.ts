@@ -99,6 +99,10 @@ export class MockNaomsNode implements NaomsNode {
       outputHash: sha256(result),
       ...(forgotten ? {} : { result }),
       engine: 'mock',
+      // Committed metering + replay params (spec §6): the mock honors
+      // the requested mode and reports fixed usage.
+      usage: { unit: 'seconds' as const, amount: 1 },
+      repro: job.repro ?? { mode: 'none' as const },
       executedAt: Date.now(),
     }
     const digest = await receiptDigest(unsigned)

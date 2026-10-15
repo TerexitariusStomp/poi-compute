@@ -18,7 +18,7 @@
 import { CANONICAL, PROJECT, WPCLOUD, validateJobResult } from '@poi/node-core/registry'
 import type { JobEnvelope } from '@poi/node-core/envelope'
 import { resultMessage } from '@poi/node-core/formats'
-import type { NaomsJobEnvelope, SignedReceipt, LaneMap } from './types'
+import type { NaomsJobEnvelope, SignedReceipt, LaneMap, ReproSpec } from './types'
 
 /** Default taskType → lane grouping. Hives advertise lanes; the bridge
  *  only dispatches types the hive granted. */
@@ -32,6 +32,27 @@ export const DEFAULT_LANE_MAP: LaneMap = {
   jury: [PROJECT.HUMAN_JURY],
   // swarm lanes (300/301) intentionally absent — durable-tier jobs stay
   // on first-party durable nodes until hive durability criteria exist.
+}
+
+/** Task types whose output is byte/hash-deterministic — canary nonce
+ *  echoes, fetches, pin/serve proofs. Their replay request is `exact`;
+ *  anything else asks for `deterministic` execution (the lender commits
+ *  the seed/decoding it actually used, or downgrades to `none`, which
+ *  scopes challenges to structural validity only). */
+const EXACT_TASKS = new Set<number>([
+  PROJECT.CANARY,
+  PROJECT.WEB_FETCH,
+  CANONICAL.STORAGE,
+  CANONICAL.BANDWIDTH,
+])
+
+export function reproRequestFor(taskType: number, override?: ReproSpec): ReproSpec {
+  if (override) return override
+  if (EXACT_TASKS.has(taskType)) return { mode: 'exact' }
+  // Human judgement can't be re-executed — don't ask for determinism
+  // we can't get; challenges here are structural/member-review only.
+  if (taskType === PROJECT.HUMAN_JURY) return { mode: 'none' }
+  return { mode: 'deterministic' }
 }
 
 export function laneForTaskType(taskType: number, map: LaneMap = DEFAULT_LANE_MAP): string | null {
@@ -59,6 +80,8 @@ export function receiptCanonical(r: Omit<SignedReceipt, 'lenderSig' | 'borrowerS
     inputHash: r.inputHash,
     outputHash: r.outputHash,
     engine: r.engine ?? null,
+    usage: r.usage ?? null,
+    repro: r.repro ?? null,
     executedAt: r.executedAt,
     // `result` is intentionally absent — the commitment is to the
     // outputHash, so the digest is identical after forgetting.
@@ -86,6 +109,7 @@ export function toNaomsEnvelope(env: JobEnvelope): NaomsJobEnvelope {
     classification: 'PUBLIC',
     modelClass: env.modelClass,
     deadline: env.deadline,
+    repro: reproRequestFor(env.taskType, (env as { repro?: ReproSpec }).repro),
     paid: !!(env.amountWei && BigInt(env.amountWei) > 0n),
   }
 }
