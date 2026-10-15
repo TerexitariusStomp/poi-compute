@@ -5,69 +5,80 @@ pool and the PoI coordinator. It exists so a hive can contribute compute
 without either codebase absorbing the other — no NAOMS source is vendored,
 no PoI internals leak into the hive.
 
-## Topology
+## Protocol model (corrected 2026-10-14, per the NAOMS authors)
 
-```
-┌──────────┐  /jobs  ┌─────────────┐  REGISTER/WS  ┌────────────┐
-│ consumer │ ──────► │ coordinator │ ◄──────────── │ hive-bridge│
-└──────────┘         └─────────────┘  JOB_DISPATCH └─────┬──────┘
-                                                        │ permit→
-                                                        │ submit→
-                                                        │ receipt
-                                                   ┌────▼──────┐
-                                                   │ NAOMS hive│
-                                                   │  lenders  │
-                                                   └───────────┘
-```
+The `/naoms/compute/1` name in the original overview was a working title —
+it does not exist. The real substrate:
 
-Outward the bridge is an ordinary volunteer: it binds a `did:key`,
-registers over the coordinator WebSocket, and receives `JOB_DISPATCH`
-envelopes. Inward it is a NAOMS borrower per the documented
-`/naoms/compute/1` flow: present VRCs → short-lived permit → capability
-set → submit → dual-signed receipt.
+- **A hive is reached as a NAOMS node over iroh (QUIC)** — signed DIDComm
+  messages through the NAOMS execution package. No HTTP surface, no
+  protocol port, no bearer tokens. The bridge either embeds a NAOMS node
+  or talks to a local one (`LocalNaomsNode` stub — transport TBD by spec).
+- **Authorization is a signed, expiring `CapabilityGrant`** bound to the
+  bridge's node key — not a permit id passed as a bearer token.
+- **The bridge's identity is hive-issued** (`grant.subjectDid`), never
+  self-declared — and it is what the bridge binds on the PoI side too, so
+  both directions carry one accountable identity.
+- **Revocation travels as signed events between peers** — the adapter
+  re-checks the event stream on every dispatch; a revoked grant dies
+  mid-flight.
+- **Receipts are signatures over a canonical, domain-separated digest**
+  (`naoms-compute-receipt/v1` + canonical JSON — no colon-joined
+  ambiguity, no key-order dependence). Lender signs, bridge countersigns
+  the same digest.
+- **Remote jobs are currently limited to an owner's own devices**;
+  hive co-member lending ships next — the bridge is not on the critical
+  path yet.
 
-## Scoping
+## Answered open questions (from the authors, 2026-10-14)
 
-The bridge registers with `site = hive:<hiveDid>`. The coordinator's
-existing site-preference + global-spillover cascade does the rest:
-hive-tagged jobs go hive-first; capacity overflow reaches the hive; a
-hive that detaches simply stops receiving its tag.
+| Q | Answer | Consequence in code |
+|---|---|---|
+| Canaries | Covert test jobs are fine **if the hive's rules openly state that testing happens** | `PROJECT.CANARY` crosses unmarked; the disclosure obligation lives in hive rules, not the envelope |
+| Retention | **No settlement carve-out** — after 7 days only a hash commitment of a paid job's receipt is kept | `paid` flag on the envelope; the bridge retains its OWN full receipt copy for PoI disputes; commitment-only receipts are rejected before credit |
+| Economics | Split lender ↔ hive treasury, ratio set by the hive | Bridge reports earned `amountWei`; the split is hive-internal, never crosses |
+| Wire format | Execution-package jobs over DIDComm/iroh — **jointly written spec, CC BY 4.0** | `docs/spec/naoms-compute.md` is the draft skeleton |
+| License | NAOMS itself unlicensed (TBD); shared spec CC BY 4.0 | Bridge code stays AGPL-3.0 under PoI; spec is the shared artifact |
 
 ## Boundary rules (enforced in `adapter.ts` / `receipt-translate.ts`)
 
 - **INTERNAL jobs never cross.** `toNaomsEnvelope` throws on any
   non-PUBLIC classification.
-- **Canaries cross unmarked.** `PROJECT.CANARY` bypasses lane filtering
-  and `canaryMarker` is never set — covert honesty measurement requires
-  indistinguishability at the boundary.
+- **Canaries cross unmarked** — `canaryMarker` is never set.
 - **Market data does not cross.** No consumer identity, no `amountWei`,
-  no site tags reach the lender.
-- **Retention signal only.** Paid jobs (`amountWei > 0`) set
-  `retention: 'settlement'` — a request that the receipt outlive the
-  default forgetting window. Whether the hive honors it is [OPEN].
-- **Results re-validate.** Receipts must satisfy the coordinator's
-  per-taskType zod schema before the bridge returns them for credit.
-- **Receipts are countersigned** (`borrowerSig`) so a lender can't replay
-  a receipt to a different permit.
+  no site tags. `paid` is the only economic signal.
+- **Results re-validate** against the coordinator's per-taskType zod
+  schema before the bridge returns them for credit.
+- **Receipts are countersigned** over the canonical digest.
+- **Digest stability across forgetting** — signatures commit to
+  `outputHash`, not retained plaintext, so a commitment-only receipt
+  still verifies (tested).
+
+## Topology
+
+```
+┌──────────┐  /jobs  ┌─────────────┐  REGISTER/WS  ┌──────────────┐
+│ consumer │ ──────► │ coordinator │ ◄──────────── │ hive-bridge  │
+└──────────┘         └─────────────┘  JOB_DISPATCH └──────┬───────┘
+                                                        │ grant →
+                                                        │ submit →   (DIDComm/iroh,
+                                                        │ receipt    signed msgs)
+                                                   ┌─────▼───────┐
+                                                   │ NAOMS node  │
+                                                   │ → hive      │
+                                                   └─────────────┘
+```
+
+The bridge registers with `site = hive:<hiveDid>`; the coordinator's
+site-preference + global-spillover cascade does the rest.
 
 ## Status
 
-- `MockHive` implements the documented flow in-process; the 11-test suite
-  covers registration scoping, boundary enforcement, retention flags,
-  schema validation, and permit renewal.
-- `HttpNaomsClient` is an honest stub for a live hive — the concrete
-  `/naoms/compute/1` serialization is [OPEN] until NAOMS protocol access
-  exists; it implements the simplest JSON-over-HTTP mapping and throws
-  clearly on anything else.
-
-## Open questions for the NAOMS authors
-
-1. Canary pass-through policy — confirmed unmarked on their side?
-2. Settlement retention vs. the 7-day default forgetting window for
-   paid work — is a carve-out mechanism real?
-3. Bridged earnings: where do they land — lender, hive treasury, bridge
-   operator? (Mirrors PoI's site-owner split.)
-4. `/naoms/compute/1` concrete wire format (message framing, VRC
-   presentation, status-list encoding).
-5. License of `compute-commons` / the packages this interoperates with —
-   NAOMS had no license at proposal time.
+- `MockNaomsNode` implements the corrected model in-process; the 11-test
+  suite covers hive-issued identity, boundary enforcement, digest
+  stability, schema validation, and event-driven revocation.
+- `LocalNaomsNode` is the honest stub pending the shared spec + NAOMS
+  execution-package access.
+- Next step is document, not code: the joint spec
+  (`docs/spec/naoms-compute.md` skeleton) hosted on Radicle, both
+  delegates' signatures required for changes.

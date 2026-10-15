@@ -1,5 +1,5 @@
 export * from './types'
-export * from './naoms-client'
+export * from './naoms-node'
 export * from './receipt-translate'
 export * from './adapter'
 export * from './mock-hive'

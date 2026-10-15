@@ -1,40 +1,43 @@
 /**
- * NAOMS-side wire types — the `/naoms/compute/1` protocol as documented in
- * the NAOMS ↔ LocalChimera overview (2026-10-13). These are OUR read of
- * that document, not vendored NAOMS code; fields marked [OPEN] in the doc
- * are represented honestly and gated in the adapter.
+ * NAOMS-side types — corrected per the NAOMS authors (2026-10-14):
+ * there is no `/naoms/compute/1` HTTP surface. All work runs as jobs
+ * through the NAOMS execution package: signed DIDComm messages over
+ * iroh (QUIC). These types model OUR side of that seam — the concrete
+ * envelope/receipt/canary format is being written as a shared spec.
  */
 
-/** Short-lived borrower permit — names the lender VRC and the live
- *  challenge. The bridge holds one per connected hive. */
-export interface BorrowerPermit {
-  /** Permit's own id (status-list indexable). */
+/** Hive-issued capability — the bridge's identity AND authorization in
+ *  one object. Never self-declared: issued by the hive, bound to the
+ *  bridge's node key, signed, expiring. Revocation travels as signed
+ *  events between peers (no status-list URL). */
+export interface CapabilityGrant {
+  /** Grant id — referenced by revocation events. */
   id: string
-  /** VRC id of the lender role this bridge was delegated. */
-  lenderVrcId: string
-  /** Hive DID the permit is scoped to. */
-  hiveDid: string
-  /** Live status-list URL — the lender can revoke by flipping a bit. */
-  statusListUrl: string
-  /** Permit expiry (unix seconds). Bridge must re-present before it lapses. */
-  expiresAt: number
-  /** Lender signature over the permit body. */
-  lenderSig: string
-}
-
-/** A hive-advertised capability set — what the pool will accept. */
-export interface HiveCapabilities {
-  /** Lanes the hive opens (maps onto PoI task types via LaneMap). */
+  /** Hive DID that issued this grant. */
+  issuerHiveDid: string
+  /** The node identity the hive issued to us — what the bridge presents
+   *  as its DID on both sides of the seam. */
+  subjectDid: string
+  /** PoI task types / lanes the grant covers. */
   lanes: string[]
-  /** Aggregate concurrency the hive advertises. */
-  concurrency: number
-  /** Model classes available ('instruct' | 'embedding' | 'fetch' | 'pin' | 'jury'). */
-  modelClasses: string[]
+  /** Expiry (unix seconds). */
+  expiresAt: number
+  /** Issuer signature over the canonical grant hash. */
+  issuerSig: string
 }
 
-/** Job envelope as sent inward to a hive lender. Deliberately narrower
- *  than the PoI JobEnvelope: no consumer identity, no payment details —
- *  the lender sees work + constraints, not the market. */
+/** Signed revocation event — delivered peer-to-peer; a grant the hive
+ *  revoked shows up here, not in a status list. */
+export interface RevocationEvent {
+  grantId: string
+  issuerHiveDid: string
+  revokedAt: number
+  issuerSig: string
+}
+
+/** Job envelope sent inward to the hive. Deliberately narrower than the
+ *  PoI JobEnvelope: no consumer identity, no payment details — the
+ *  lender sees work + constraints, not the market. */
 export interface NaomsJobEnvelope {
   /** Bridge-assigned id — correlates the receipt back to the PoI job. */
   bridgeJobId: string
@@ -45,36 +48,46 @@ export interface NaomsJobEnvelope {
   modelClass?: string
   deadline?: number
   /**
-   * [OPEN in the doc] canary pass-through: PoI canaries are covert by
-   *  design, so the bridge deliberately does NOT mark them. This field
-   *  exists only for tests proving nothing leaks — it is never set to
-   *  true on a real dispatch. */
+   * Canaries cross UNMARKED (agreed with NAOMS: covert test jobs are
+   * fine as long as hive rules openly state that testing happens).
+   * This field exists only so tests can prove nothing leaks — it is
+   * never set true on a real dispatch. */
   canaryMarker?: false
   /**
-   * [OPEN in the doc] retention: paid jobs need receipts that outlive
-   *  NAOMS's default 7-day forgetting window. 'settlement' requests the
-   *  carve-out; 'default' accepts hive retention. */
-  retention: 'default' | 'settlement'
+   * Retention per NAOMS: after the 7-day window only a hash commitment
+   * of a paid job's receipt is kept — there is NO full-receipt carve-out.
+   * `paid` marks the job so the commitment is retained; the BRIDGE keeps
+   * its own receipt copy for the PoI dispute window. */
+  paid: boolean
 }
 
-/** Dual-signed execution receipt returned by a hive lender. */
-export interface DualSignedReceipt {
+/** Execution receipt — signatures over a canonical, domain-separated
+ *  digest (not colon-joined strings). See receipt-translate.ts. */
+export interface SignedReceipt {
   bridgeJobId: string
-  /** Lender DID that ran the job. */
+  /** Hive-issued identity of the lender that ran the job. */
   lenderDid: string
-  /** Salted hashes — hive keeps the preimage, bridge keeps the hash. */
+  /** sha256 of the receipt's canonical body — what both signatures cover. */
+  digest: string
+  /** Salted commitment hashes — hive keeps the preimage. */
   inputHash: string
   outputHash: string
-  /** The plaintext result — only present while retained; after hive
-   *  forgetting, receipts carry hashes only. */
+  /** Plaintext result — present only inside the retention window; after
+   *  forgetting, receipts carry the commitment hashes only. */
   result?: string
-  /** Engine claim (mirrors PoI's engine field for the prover). */
+  /** Engine claim (mirrors PoI's engine field for replay verification). */
   engine?: string
-  /** Borrower (bridge) countersignature slot — filled by the bridge. */
-  borrowerSig?: string
+  /** Signatures over `digest` — lender first, bridge countersigns. */
   lenderSig: string
-  /** Timestamped execution window. */
+  borrowerSig?: string
   executedAt: number
 }
 
 export type LaneMap = Record<string, number[]>
+
+/** What a hive will run under a grant — scoped to that capability. */
+export interface HiveCapabilitySet {
+  lanes: string[]
+  concurrency: number
+  modelClasses: string[]
+}
